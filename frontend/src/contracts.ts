@@ -1,15 +1,29 @@
-export const CREW_MANAGER_ADDRESS = "0x5fbdb2315678afecb367f032d93f642f64180aa3"; // 실제 배포된 주소
-export const GAME_REGISTRY_ADDRESS = "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0";
-export const MATCH_MANAGER_ADDRESS = "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9";
+import { crewManagerAbi } from './abi/crewManagerAbi';
+import { gameRegistryAbi } from './abi/gameRegistryAbi';
+import { matchManagerAbi } from './abi/matchManagerAbi';
 
-export const ACCOUNT_0 = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-export const PRIVATE_KEY_0 = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+// Contract addresses (Sepolia deployment)
+export const CREW_MANAGER_ADDRESS = "0xe2899bddFD890e320e643044c6b95B9B0b84157A";
+export const GAME_REGISTRY_ADDRESS = "0x1c91347f2A44538ce62453BEBd9Aa907C662b4bD";
+export const MATCH_MANAGER_ADDRESS = "0x93f8dddd876c7dBE3323723500e83E202A7C96CC";
 
-export const ACCOUNT_1 = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
-export const PRIVATE_KEY_1 = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+// Contract ABIs
+export const CREW_MANAGER_ABI = crewManagerAbi;
+export const GAME_REGISTRY_ABI = gameRegistryAbi;
+export const MATCH_MANAGER_ABI = matchManagerAbi;
 
-export const ACCOUNT_2 = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC";
-export const PRIVATE_KEY_2 = "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a";
-
-export const ACCOUNT_3 = "0x90F79bf6EB2c4f870365E785982E1f101E93b906";
-export const PRIVATE_KEY_3 = "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6";
+// Contract configurations for React hooks
+export const contracts = {
+  crewManager: {
+    address: CREW_MANAGER_ADDRESS,
+    abi: CREW_MANAGER_ABI,
+  },
+  gameRegistry: {
+    address: GAME_REGISTRY_ADDRESS,
+    abi: GAME_REGISTRY_ABI,
+  },
+  matchManager: {
+    address: MATCH_MANAGER_ADDRESS,
+    abi: MATCH_MANAGER_ABI,
+  },
+} as const;
