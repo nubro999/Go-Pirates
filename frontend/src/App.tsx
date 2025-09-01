@@ -1,178 +1,449 @@
-import React, { useState } from "react";
-import { ethers } from "ethers";
-import CREW_MANAGER_ABI from "./abi/crewManagerAbi";
+import React, { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
+import './App.css';
+import { CREW_MANAGER_ABI, CREW_MANAGER_ADDRESS } from './abi/crewManagerAbi';
+import { GAME_REGISTRY_ABI, GAME_REGISTRY_ADDRESS } from './abi/gameRegistryAbi';
+import { MATCH_MANAGER_ABI, MATCH_MANAGER_ADDRESS } from './abi/matchManagerAbi';
 
-type CrewInfo = {
+// 타입 정의
+interface CrewInfo {
   owner: string;
   wins: number;
   losses: number;
   draws: number;
-};
+}
 
-const DEFAULT_CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+interface GameInfo {
+  gameId: string;
+  name: string;
+  gameURL: string;
+}
 
-const CrewManagerApp: React.FC = () => {
-  const [contractAddress, setContractAddress] = useState<string>(DEFAULT_CONTRACT_ADDRESS);
+interface MatchInfo {
+  matchId: string;
+  gameId: string;
+  winners: string[];
+  losers: string[];
+  draws: string[];
+  finalized: boolean;
+}
+
+function App() {
+  // 지갑 연결 상태
   const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
   const [signer, setSigner] = useState<ethers.Signer | null>(null);
-  const [contract, setContract] = useState<ethers.Contract | null>(null);
+  const [account, setAccount] = useState<string>('');
 
-  const [crewId, setCrewId] = useState<string>("");
+  // 컨트랙트 인스턴스
+  const [crewManager, setCrewManager] = useState<ethers.Contract | null>(null);
+  const [gameRegistry, setGameRegistry] = useState<ethers.Contract | null>(null);
+  const [matchManager, setMatchManager] = useState<ethers.Contract | null>(null);
+
+  // CrewManager 상태
+  const [crewId, setCrewId] = useState<string>('');
   const [crewInfo, setCrewInfo] = useState<CrewInfo | null>(null);
-  const [point, setPoint] = useState<string | null>(null);
-  const [registerResult, setRegisterResult] = useState<string | null>(null);
-  const [error, setError] = useState<string>("");
+  const [crewPoint, setCrewPoint] = useState<string>('');
+  const [matchManagerAddr, setMatchManagerAddr] = useState<string>(MATCH_MANAGER_ADDRESS);
 
-  // MetaMask 연결
+  // GameRegistry 상태
+  const [gameName, setGameName] = useState<string>('');
+  const [gameURL, setGameURL] = useState<string>('');
+  const [gameId, setGameId] = useState<string>('');
+  const [gameInfo, setGameInfo] = useState<GameInfo | null>(null);
+
+  // MatchManager 상태
+  const [matchGameId, setMatchGameId] = useState<string>('');
+  const [winners, setWinners] = useState<string>('');
+  const [losers, setLosers] = useState<string>('');
+  const [draws, setDraws] = useState<string>('');
+  const [matchId, setMatchId] = useState<string>('');
+  const [matchInfo, setMatchInfo] = useState<MatchInfo | null>(null);
+
+  // 에러 상태
+  const [error, setError] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
+
+  // 지갑 연결
   const connectWallet = async () => {
     try {
-      if (!(window as any).ethereum) throw new Error("MetaMask가 설치되어 있지 않습니다.");
-      await (window as any).ethereum.request({ method: "eth_requestAccounts" });
-      const _provider = new ethers.BrowserProvider((window as any).ethereum);
-      const _signer = await _provider.getSigner();
-      setProvider(_provider);
-      setSigner(_signer);
-      setError("");
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
+      if (!window.ethereum) {
+        throw new Error('MetaMask가 설치되어 있지 않습니다.');
+      }
 
-  // 컨트랙트 인스턴스 생성
-  const loadContract = () => {
-    if (!provider || !signer || !contractAddress) {
-      setError("지갑, 서명자, 컨트랙트 주소를 모두 입력하세요.");
-      return;
-    }
-    const _contract = new ethers.Contract(contractAddress, CREW_MANAGER_ABI, signer);
-    setContract(_contract);
-    setError("");
-  };
-
-  // 크루 등록
-  const registerCrew = async () => {
-    if (!contract) return setError("컨트랙트를 먼저 연결하세요.");
-    try {
-      const tx = await contract.registerCrew();
-      const receipt = await tx.wait();
-      // 이벤트에서 crewId 추출
-      const event = receipt.logs?.find((e: any) => e.fragment?.name === "CrewRegistered");
-      setRegisterResult(event?.args?.crewId?.toString() || "등록됨");
-      setError("");
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
-  // 크루 정보 조회
-  const fetchCrewInfo = async () => {
-    if (!contract || !crewId) return setError("컨트랙트와 크루ID를 입력하세요.");
-    try {
-      const info = await contract.getCrew(crewId);
-      setCrewInfo({
-        owner: info.owner,
-        wins: Number(info.wins),
-        losses: Number(info.losses),
-        draws: Number(info.draws)
+      // ethers v6: BrowserProvider 사용
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      
+      // 계정 요청
+      const accounts = await window.ethereum.request({ 
+        method: 'eth_requestAccounts' 
       });
-      setError("");
+      
+      const signer = await provider.getSigner();
+      const address = await signer.getAddress();
+
+      // 컨트랙트 인스턴스 생성
+      const crewContract = new ethers.Contract(
+        CREW_MANAGER_ADDRESS,
+        CREW_MANAGER_ABI,
+        signer
+      );
+      const gameContract = new ethers.Contract(
+        GAME_REGISTRY_ADDRESS,
+        GAME_REGISTRY_ABI,
+        signer
+      );
+      const matchContract = new ethers.Contract(
+        MATCH_MANAGER_ADDRESS,
+        MATCH_MANAGER_ABI,
+        signer
+      );
+
+      setProvider(provider);
+      setSigner(signer);
+      setAccount(address);
+      setCrewManager(crewContract);
+      setGameRegistry(gameContract);
+      setMatchManager(matchContract);
+      setError('');
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || '지갑 연결 실패');
     }
   };
 
-  // 포인트 조회
-  const fetchPoint = async () => {
-    if (!contract || !crewId) return setError("컨트랙트와 크루ID를 입력하세요.");
-    try {
-      const pt = await contract.getPoint(crewId);
-      setPoint(pt.toString());
-      setError("");
-    } catch (err: any) {
-      setError(err.message);
+  // 계정 변경 감지
+  useEffect(() => {
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', (accounts: string[]) => {
+        if (accounts.length === 0) {
+          setAccount('');
+          setSigner(null);
+        } else {
+          connectWallet();
+        }
+      });
     }
-  };
+  }, []);
 
-  // 승/무/패 추가
-  const addResult = async (type: "win" | "draw" | "loss") => {
-    if (!contract || !crewId) return setError("컨트랙트와 크루ID를 입력하세요.");
+  // ===== CrewManager 함수들 =====
+  const setMatchManagerAddress = async () => {
+    if (!crewManager) return;
+    setLoading(true);
     try {
-      let tx;
-      if (type === "win") tx = await contract.addWin(crewId);
-      else if (type === "draw") tx = await contract.addDraw(crewId);
-      else if (type === "loss") tx = await contract.addLoss(crewId);
+      const tx = await crewManager.setMatchManager(matchManagerAddr);
       await tx.wait();
-      setError("");
-      fetchCrewInfo(); // 결과 반영
+      alert('MatchManager 설정 완료!');
+      setError('');
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'MatchManager 설정 실패');
     }
+    setLoading(false);
+  };
+
+  const registerCrew = async () => {
+    if (!crewManager) return;
+    setLoading(true);
+    try {
+      const tx = await crewManager.registerCrew();
+      const receipt = await tx.wait();
+      
+      // 이벤트에서 crewId 추출
+      const event = receipt.logs.find((log: any) => {
+        try {
+          const parsed = crewManager.interface.parseLog(log);
+          return parsed?.name === 'CrewRegistered';
+        } catch {
+          return false;
+        }
+      });
+      
+      if (event) {
+        const parsed = crewManager.interface.parseLog(event);
+        const newCrewId = parsed?.args.crewId.toString();
+        alert(`크루 등록 완료! ID: ${newCrewId}`);
+      }
+      setError('');
+    } catch (err: any) {
+      setError(err.message || '크루 등록 실패');
+    }
+    setLoading(false);
+  };
+
+  const fetchCrewInfo = async () => {
+    if (!crewManager || !crewId) return;
+    setLoading(true);
+    try {
+      const info = await crewManager.getCrew(crewId);
+      setCrewInfo({
+        owner: info[0],
+        wins: Number(info[1]),
+        losses: Number(info[2]),
+        draws: Number(info[3])
+      });
+      
+      const point = await crewManager.getPoint(crewId);
+      setCrewPoint(point.toString());
+      setError('');
+    } catch (err: any) {
+      setError(err.message || '크루 정보 조회 실패');
+    }
+    setLoading(false);
+  };
+
+  // ===== GameRegistry 함수들 =====
+  const addGame = async () => {
+    if (!gameRegistry || !gameName || !gameURL) return;
+    setLoading(true);
+    try {
+      const tx = await gameRegistry.addGame(gameName, gameURL);
+      const receipt = await tx.wait();
+      
+      const newGameId = await gameRegistry.nextGameId() - 1;
+      alert(`게임 등록 완료! ID: ${newGameId}`);
+      setGameName('');
+      setGameURL('');
+      setError('');
+    } catch (err: any) {
+      setError(err.message || '게임 등록 실패');
+    }
+    setLoading(false);
+  };
+
+  const fetchGameInfo = async () => {
+    if (!gameRegistry || !gameId) return;
+    setLoading(true);
+    try {
+      const info = await gameRegistry.getGame(gameId);
+      setGameInfo({
+        gameId: info[0].toString(),
+        name: info[1],
+        gameURL: info[2]
+      });
+      setError('');
+    } catch (err: any) {
+      setError(err.message || '게임 정보 조회 실패');
+    }
+    setLoading(false);
+  };
+
+  // ===== MatchManager 함수들 =====
+  const finalizeMatch = async () => {
+    if (!matchManager || !matchGameId) return;
+    setLoading(true);
+    try {
+      const winnersArray = winners ? winners.split(',').map(id => id.trim()) : [];
+      const losersArray = losers ? losers.split(',').map(id => id.trim()) : [];
+      const drawsArray = draws ? draws.split(',').map(id => id.trim()) : [];
+
+      const tx = await matchManager.finalizeMatch(
+        matchGameId,
+        winnersArray,
+        losersArray,
+        drawsArray
+      );
+      const receipt = await tx.wait();
+      
+      // 이벤트에서 matchId 추출
+      const event = receipt.logs.find((log: any) => {
+        try {
+          const parsed = matchManager.interface.parseLog(log);
+          return parsed?.name === 'MatchFinalized';
+        } catch {
+          return false;
+        }
+      });
+      
+      if (event) {
+        const parsed = matchManager.interface.parseLog(event);
+        const newMatchId = parsed?.args.matchId.toString();
+        alert(`매치 완료! ID: ${newMatchId}`);
+      }
+      setError('');
+    } catch (err: any) {
+      setError(err.message || '매치 완료 처리 실패');
+    }
+    setLoading(false);
+  };
+
+  const fetchMatchInfo = async () => {
+    if (!matchManager || !matchId) return;
+    setLoading(true);
+    try {
+      const info = await matchManager.getMatch(matchId);
+      setMatchInfo({
+        matchId: info[0].toString(),
+        gameId: info[1].toString(),
+        winners: info[2].map((id: any) => id.toString()),
+        losers: info[3].map((id: any) => id.toString()),
+        draws: info[4].map((id: any) => id.toString()),
+        finalized: info[5]
+      });
+      setError('');
+    } catch (err: any) {
+      setError(err.message || '매치 정보 조회 실패');
+    }
+    setLoading(false);
   };
 
   return (
-    <div className="max-w-md mx-auto p-4 font-sans border rounded">
-      <h2 className="text-xl font-bold mb-2">CrewManager DApp</h2>
-      <button className="mb-3 px-3 py-1 bg-blue-500 text-white rounded" onClick={connectWallet}>
-        MetaMask 연결
-      </button>
-      <br />
-      <input
-        type="text"
-        placeholder="컨트랙트 주소 입력"
-        value={contractAddress}
-        onChange={e => setContractAddress(e.target.value)}
-        className="w-full border p-2 mb-2"
-      />
-      <button className="mb-3 px-3 py-1 bg-green-500 text-white rounded" onClick={loadContract}>
-        컨트랙트 연결
-      </button>
-      <hr className="my-4" />
-
-      <h3 className="font-semibold">크루 등록</h3>
-      <button className="mb-2 px-3 py-1 bg-purple-500 text-white rounded" onClick={registerCrew}>
-        크루 등록
-      </button>
-      {registerResult && <div>등록 결과: {registerResult}</div>}
-
-      <hr className="my-4" />
-      <h3 className="font-semibold">크루 정보 조회</h3>
-      <input
-        type="number"
-        placeholder="크루 ID 입력"
-        value={crewId}
-        onChange={e => setCrewId(e.target.value)}
-        className="w-full border p-2 mb-2"
-      />
-      <button className="mb-2 px-3 py-1 bg-indigo-500 text-white rounded" onClick={fetchCrewInfo}>
-        조회
-      </button>
-      {crewInfo && (
-        <div className="border p-2 my-2 rounded bg-gray-50">
-          <div>Owner: {crewInfo.owner}</div>
-          <div>Wins: {crewInfo.wins}</div>
-          <div>Losses: {crewInfo.losses}</div>
-          <div>Draws: {crewInfo.draws}</div>
+    <div className="App">
+      <header className="App-header">
+        <h1>Crew Manager DApp</h1>
+        
+        {/* 지갑 연결 섹션 */}
+        <div className="wallet-section">
+          {!account ? (
+            <button onClick={connectWallet}>MetaMask 연결</button>
+          ) : (
+            <p>연결된 계정: {account}</p>
+          )}
         </div>
-      )}
 
-      <hr className="my-4" />
-      <h3 className="font-semibold">승/무/패 추가</h3>
-      <div className="space-x-2">
-        <button className="px-3 py-1 bg-red-500 text-white rounded" onClick={() => addResult("win")}>승 추가</button>
-        <button className="px-3 py-1 bg-yellow-500 text-white rounded" onClick={() => addResult("draw")}>무 추가</button>
-        <button className="px-3 py-1 bg-gray-700 text-white rounded" onClick={() => addResult("loss")}>패 추가</button>
-      </div>
+        {/* 에러 메시지 */}
+        {error && <div className="error">{error}</div>}
+        
+        {/* 로딩 표시 */}
+        {loading && <div className="loading">처리 중...</div>}
 
-      <hr className="my-4" />
-      <h3 className="font-semibold">포인트 조회</h3>
-      <button className="mb-2 px-3 py-1 bg-teal-500 text-white rounded" onClick={fetchPoint}>
-        포인트 조회
-      </button>
-      {point && <div>포인트: {point}</div>}
+        {account && (
+          <>
+            {/* CrewManager 섹션 */}
+            <section className="contract-section">
+              <h2>Crew Manager</h2>
 
-      {error && <div className="text-red-500 mt-2">에러: {error}</div>}
+              <div className="input-group">
+                <h3>크루 등록</h3>
+                <button onClick={registerCrew}>크루 등록하기</button>
+              </div>
+
+              <div className="input-group">
+                <h3>크루 정보 조회</h3>
+                <input
+                  type="number"
+                  value={crewId}
+                  onChange={(e) => setCrewId(e.target.value)}
+                  placeholder="크루 ID"
+                />
+                <button onClick={fetchCrewInfo}>조회</button>
+                
+                {crewInfo && (
+                  <div className="info-display">
+                    <p>소유자: {crewInfo.owner}</p>
+                    <p>승: {crewInfo.wins} / 패: {crewInfo.losses} / 무: {crewInfo.draws}</p>
+                    <p>포인트: {crewPoint}</p>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* GameRegistry 섹션 */}
+            <section className="contract-section">
+              <h2>Game Registry</h2>
+              
+              <div className="input-group">
+                <h3>게임 등록</h3>
+                <input
+                  type="text"
+                  value={gameName}
+                  onChange={(e) => setGameName(e.target.value)}
+                  placeholder="게임 이름"
+                />
+                <input
+                  type="text"
+                  value={gameURL}
+                  onChange={(e) => setGameURL(e.target.value)}
+                  placeholder="게임 URL"
+                />
+                <button onClick={addGame}>게임 등록</button>
+              </div>
+
+              <div className="input-group">
+                <h3>게임 정보 조회</h3>
+                <input
+                  type="number"
+                  value={gameId}
+                  onChange={(e) => setGameId(e.target.value)}
+                  placeholder="게임 ID"
+                />
+                <button onClick={fetchGameInfo}>조회</button>
+                
+                {gameInfo && (
+                  <div className="info-display">
+                    <p>게임 ID: {gameInfo.gameId}</p>
+                    <p>이름: {gameInfo.name}</p>
+                    <p>URL: {gameInfo.gameURL}</p>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* MatchManager 섹션 */}
+            <section className="contract-section">
+              <h2>Match Manager</h2>
+              
+              <div className="input-group">
+                <h3>매치 결과 등록</h3>
+                <input
+                  type="number"
+                  value={matchGameId}
+                  onChange={(e) => setMatchGameId(e.target.value)}
+                  placeholder="게임 ID"
+                />
+                <input
+                  type="text"
+                  value={winners}
+                  onChange={(e) => setWinners(e.target.value)}
+                  placeholder="승자 크루 ID (쉼표로 구분)"
+                />
+                <input
+                  type="text"
+                  value={losers}
+                  onChange={(e) => setLosers(e.target.value)}
+                  placeholder="패자 크루 ID (쉼표로 구분)"
+                />
+                <input
+                  type="text"
+                  value={draws}
+                  onChange={(e) => setDraws(e.target.value)}
+                  placeholder="무승부 크루 ID (쉼표로 구분)"
+                />
+                <button onClick={finalizeMatch}>매치 완료</button>
+              </div>
+
+              <div className="input-group">
+                <h3>매치 정보 조회</h3>
+                <input
+                  type="number"
+                  value={matchId}
+                  onChange={(e) => setMatchId(e.target.value)}
+                  placeholder="매치 ID"
+                />
+                <button onClick={fetchMatchInfo}>조회</button>
+                
+                {matchInfo && (
+                  <div className="info-display">
+                    <p>매치 ID: {matchInfo.matchId}</p>
+                    <p>게임 ID: {matchInfo.gameId}</p>
+                    <p>승자: {matchInfo.winners.join(', ') || '없음'}</p>
+                    <p>패자: {matchInfo.losers.join(', ') || '없음'}</p>
+                    <p>무승부: {matchInfo.draws.join(', ') || '없음'}</p>
+                    <p>완료 여부: {matchInfo.finalized ? '완료' : '진행중'}</p>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* 컨트랙트 주소 정보 */}
+            <section className="address-info">
+              <h3>배포된 컨트랙트 주소</h3>
+              <p>CrewManager: {CREW_MANAGER_ADDRESS}</p>
+              <p>GameRegistry: {GAME_REGISTRY_ADDRESS}</p>
+              <p>MatchManager: {MATCH_MANAGER_ADDRESS}</p>
+            </section>
+          </>
+        )}
+      </header>
     </div>
   );
-};
+}
 
-export default CrewManagerApp;
+export default App;
