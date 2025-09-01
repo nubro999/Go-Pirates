@@ -1,506 +1,178 @@
-import { useState, useEffect } from 'react';
-import { ethers } from 'ethers';
-import './App.css';
-import { contracts } from './contracts';
+import React, { useState } from "react";
+import { ethers } from "ethers";
+import CREW_MANAGER_ABI from "./abi/crewManagerAbi";
 
-// Extend Window interface for MetaMask
-declare global {
-  interface Window {
-    ethereum?: any;
-  }
-}
-
-interface Crew {
-  id: string;
+type CrewInfo = {
   owner: string;
   wins: number;
   losses: number;
   draws: number;
-  points: number;
-}
+};
 
-interface Game {
-  id: string;
-  name: string;
-  gameURL: string;
-}
+const DEFAULT_CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 
-interface Match {
-  id: string;
-  gameId: string;
-  winners: string[];
-  losers: string[];
-  draws: string[];
-  finalized: boolean;
-}
-
-function App() {
+const CrewManagerApp: React.FC = () => {
+  const [contractAddress, setContractAddress] = useState<string>(DEFAULT_CONTRACT_ADDRESS);
   const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
-  const [signer, setSigner] = useState<ethers.JsonRpcSigner | null>(null);
-  const [account, setAccount] = useState<string>('');
-  const [isConnected, setIsConnected] = useState<boolean>(false);
-  
-  const [crews, setCrews] = useState<Crew[]>([]);
-  const [games, setGames] = useState<Game[]>([]);
-  const [matches, setMatches] = useState<Match[]>([]);
-  
-  const [newGameName, setNewGameName] = useState('');
-  const [newGameURL, setNewGameURL] = useState('');
-  const [selectedGameId, setSelectedGameId] = useState('');
-  const [winners, setWinners] = useState('');
-  const [losers, setLosers] = useState('');
-  const [drawsInput, setDrawsInput] = useState('');
-  
-  const [contractsDeployed, setContractsDeployed] = useState<{
-    crewManager: boolean;
-    gameRegistry: boolean;
-    matchManager: boolean;
-  }>({ crewManager: false, gameRegistry: false, matchManager: false });
+  const [signer, setSigner] = useState<ethers.Signer | null>(null);
+  const [contract, setContract] = useState<ethers.Contract | null>(null);
 
-  // Test contract methods
-  const testContractMethods = async () => {
-    if (!provider) return;
-    
-    try {
-      // Test with a simple call to check if the contract interface matches
-      const crewManagerContract = new ethers.Contract(
-        contracts.crewManager.address,
-        contracts.crewManager.abi,
-        provider
-      );
-      
-      console.log('Testing contract methods...');
-      
-      // Try to call a simple view function
-      try {
-        const result = await provider.call({
-          to: contracts.crewManager.address,
-          data: "0x70a8c0e5" // nextCrewId() function selector
-        });
-        console.log('Raw nextCrewId call result:', result);
-      } catch (error) {
-        console.error('Raw call failed:', error);
-      }
-      
-    } catch (error) {
-      console.error('Error testing contract methods:', error);
-    }
-  };
+  const [crewId, setCrewId] = useState<string>("");
+  const [crewInfo, setCrewInfo] = useState<CrewInfo | null>(null);
+  const [point, setPoint] = useState<string | null>(null);
+  const [registerResult, setRegisterResult] = useState<string | null>(null);
+  const [error, setError] = useState<string>("");
 
-  // Initialize ethers and connect wallet
+  // MetaMask 연결
   const connectWallet = async () => {
     try {
-      if (window.ethereum) {
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        const signer = await provider.getSigner();
-        const address = await signer.getAddress();
-        
-        setProvider(provider);
-        setSigner(signer);
-        setAccount(address);
-        setIsConnected(true);
-        
-        console.log('Connected to wallet:', address);
-      } else {
-        alert('Please install MetaMask!');
-      }
-    } catch (error) {
-      console.error('Error connecting wallet:', error);
+      if (!(window as any).ethereum) throw new Error("MetaMask가 설치되어 있지 않습니다.");
+      await (window as any).ethereum.request({ method: "eth_requestAccounts" });
+      const _provider = new ethers.BrowserProvider((window as any).ethereum);
+      const _signer = await _provider.getSigner();
+      setProvider(_provider);
+      setSigner(_signer);
+      setError("");
+    } catch (err: any) {
+      setError(err.message);
     }
   };
 
-  // Register a new crew
+  // 컨트랙트 인스턴스 생성
+  const loadContract = () => {
+    if (!provider || !signer || !contractAddress) {
+      setError("지갑, 서명자, 컨트랙트 주소를 모두 입력하세요.");
+      return;
+    }
+    const _contract = new ethers.Contract(contractAddress, CREW_MANAGER_ABI, signer);
+    setContract(_contract);
+    setError("");
+  };
+
+  // 크루 등록
   const registerCrew = async () => {
-    if (!signer) return;
-    
+    if (!contract) return setError("컨트랙트를 먼저 연결하세요.");
     try {
-      const crewManagerContract = new ethers.Contract(
-        contracts.crewManager.address,
-        contracts.crewManager.abi,
-        signer
-      );
-      
-      const tx = await crewManagerContract.registerCrew();
+      const tx = await contract.registerCrew();
+      const receipt = await tx.wait();
+      // 이벤트에서 crewId 추출
+      const event = receipt.logs?.find((e: any) => e.fragment?.name === "CrewRegistered");
+      setRegisterResult(event?.args?.crewId?.toString() || "등록됨");
+      setError("");
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  // 크루 정보 조회
+  const fetchCrewInfo = async () => {
+    if (!contract || !crewId) return setError("컨트랙트와 크루ID를 입력하세요.");
+    try {
+      const info = await contract.getCrew(crewId);
+      setCrewInfo({
+        owner: info.owner,
+        wins: Number(info.wins),
+        losses: Number(info.losses),
+        draws: Number(info.draws)
+      });
+      setError("");
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  // 포인트 조회
+  const fetchPoint = async () => {
+    if (!contract || !crewId) return setError("컨트랙트와 크루ID를 입력하세요.");
+    try {
+      const pt = await contract.getPoint(crewId);
+      setPoint(pt.toString());
+      setError("");
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  // 승/무/패 추가
+  const addResult = async (type: "win" | "draw" | "loss") => {
+    if (!contract || !crewId) return setError("컨트랙트와 크루ID를 입력하세요.");
+    try {
+      let tx;
+      if (type === "win") tx = await contract.addWin(crewId);
+      else if (type === "draw") tx = await contract.addDraw(crewId);
+      else if (type === "loss") tx = await contract.addLoss(crewId);
       await tx.wait();
-      
-      console.log('Crew registered successfully!');
-      loadCrews();
-    } catch (error) {
-      console.error('Error registering crew:', error);
+      setError("");
+      fetchCrewInfo(); // 결과 반영
+    } catch (err: any) {
+      setError(err.message);
     }
   };
-
-  // Add a new game
-  const addGame = async () => {
-    if (!signer || !newGameName || !newGameURL) return;
-    
-    try {
-      const gameRegistryContract = new ethers.Contract(
-        contracts.gameRegistry.address,
-        contracts.gameRegistry.abi,
-        signer
-      );
-      
-      const tx = await gameRegistryContract.addGame(newGameName, newGameURL);
-      await tx.wait();
-      
-      console.log('Game added successfully!');
-      setNewGameName('');
-      setNewGameURL('');
-      loadGames();
-    } catch (error) {
-      console.error('Error adding game:', error);
-    }
-  };
-
-  // Finalize a match
-  const finalizeMatch = async () => {
-    if (!signer || !selectedGameId) return;
-    
-    try {
-      const matchManagerContract = new ethers.Contract(
-        contracts.matchManager.address,
-        contracts.matchManager.abi,
-        signer
-      );
-      
-      const winnersArray = winners.split(',').map(id => id.trim()).filter(id => id);
-      const losersArray = losers.split(',').map(id => id.trim()).filter(id => id);
-      const drawsArray = drawsInput.split(',').map(id => id.trim()).filter(id => id);
-      
-      const tx = await matchManagerContract.finalizeMatch(
-        selectedGameId,
-        winnersArray,
-        losersArray,
-        drawsArray
-      );
-      await tx.wait();
-      
-      console.log('Match finalized successfully!');
-      setSelectedGameId('');
-      setWinners('');
-      setLosers('');
-      setDrawsInput('');
-      loadCrews();
-      loadMatches();
-    } catch (error) {
-      console.error('Error finalizing match:', error);
-    }
-  };
-
-  // Load crews from contract
-  const loadCrews = async () => {
-    if (!provider) return;
-    
-    try {
-      const crewManagerContract = new ethers.Contract(
-        contracts.crewManager.address,
-        contracts.crewManager.abi,
-        provider
-      );
-      
-      // Check if contract exists by checking bytecode
-      const code = await provider.getCode(contracts.crewManager.address);
-      console.log('CrewManager contract code length:', code.length);
-      if (code === '0x') {
-        console.error('CrewManager contract not deployed at address:', contracts.crewManager.address);
-        setContractsDeployed(prev => ({ ...prev, crewManager: false }));
-        return;
-      }
-      setContractsDeployed(prev => ({ ...prev, crewManager: true }));
-      
-      console.log('Calling nextCrewId() on address:', contracts.crewManager.address);
-      console.log('nextCrewId function not available, scanning for crews...');
-      const crewsData: Crew[] = [];
-      
-      // Since nextCrewId doesn't work, try to fetch crews starting from ID 1
-      for (let i = 1; i <= 100; i++) { // Reasonable upper limit
-        try {
-          const [owner, wins, losses, draws] = await crewManagerContract.getCrew(i);
-          const points = await crewManagerContract.getPoint(i);
-          
-          crewsData.push({
-            id: i.toString(),
-            owner,
-            wins: Number(wins),
-            losses: Number(losses),
-            draws: Number(draws),
-            points: Number(points)
-          });
-        } catch (error) {
-          console.log(`Crew ${i} not found, stopping scan`);
-          break; // Stop when we hit the first non-existent crew
-        }
-      }
-      
-      setCrews(crewsData);
-    } catch (error) {
-      console.error('Error loading crews - contract may not be deployed:', error);
-    }
-  };
-
-  // Load games from contract
-  const loadGames = async () => {
-    if (!provider) return;
-    
-    try {
-      const gameRegistryContract = new ethers.Contract(
-        contracts.gameRegistry.address,
-        contracts.gameRegistry.abi,
-        provider
-      );
-      
-      // Check if contract exists
-      const code = await provider.getCode(contracts.gameRegistry.address);
-      if (code === '0x') {
-        console.error('GameRegistry contract not deployed at address:', contracts.gameRegistry.address);
-        setContractsDeployed(prev => ({ ...prev, gameRegistry: false }));
-        return;
-      }
-      setContractsDeployed(prev => ({ ...prev, gameRegistry: true }));
-      
-      console.log('nextGameId function not available, scanning for games...');
-      const gamesData: Game[] = [];
-      
-      // Since nextGameId doesn't work, try to fetch games starting from ID 1
-      for (let i = 1; i <= 100; i++) { // Reasonable upper limit
-          try {
-            console.log(`Loading game ${i}`);
-            const [gameId, name, gameURL] = await gameRegistryContract.getGame(i);
-            
-            gamesData.push({
-              id: gameId.toString(),
-              name,
-              gameURL
-            });
-        } catch (error) {
-          console.log(`Game ${i} not found, stopping scan`);
-          break; // Stop when we hit the first non-existent game
-        }
-      }
-      
-      setGames(gamesData);
-    } catch (error) {
-      console.error('Error loading games - contract may not be deployed:', error);
-    }
-  };
-
-  // Load matches from contract
-  const loadMatches = async () => {
-    if (!provider) return;
-    
-    try {
-      const matchManagerContract = new ethers.Contract(
-        contracts.matchManager.address,
-        contracts.matchManager.abi,
-        provider
-      );
-      
-      // Check if contract exists
-      const code = await provider.getCode(contracts.matchManager.address);
-      if (code === '0x') {
-        console.error('MatchManager contract not deployed at address:', contracts.matchManager.address);
-        setContractsDeployed(prev => ({ ...prev, matchManager: false }));
-        return;
-      }
-      setContractsDeployed(prev => ({ ...prev, matchManager: true }));
-      
-      console.log('nextMatchId function not available, scanning for matches...');
-      const matchesData: Match[] = [];
-      
-      // Since nextMatchId doesn't work, try to fetch matches starting from ID 1
-      for (let i = 1; i <= 100; i++) { // Reasonable upper limit
-        try {
-          const [id, gameId, winners, losers, draws, finalized] = await matchManagerContract.getMatch(i);
-          
-          matchesData.push({
-            id: id.toString(),
-            gameId: gameId.toString(),
-            winners: winners.map((w: any) => w.toString()),
-            losers: losers.map((l: any) => l.toString()),
-            draws: draws.map((d: any) => d.toString()),
-            finalized
-          });
-        } catch (error) {
-          console.log(`Match ${i} not found, stopping scan`);
-          break; // Stop when we hit the first non-existent match
-        }
-      }
-      
-      setMatches(matchesData);
-    } catch (error) {
-      console.error('Error loading matches - contract may not be deployed:', error);
-    }
-  };
-
-  // Load data on connection
-  useEffect(() => {
-    if (isConnected && provider) {
-      loadCrews();
-      loadGames();
-      loadMatches();
-    }
-  }, [isConnected, provider]);
 
   return (
-    <div className="App">
-      <header className="App-header">
-        <h1>GoPirates - Crew Management System</h1>
-        
-        {!isConnected ? (
-          <button onClick={connectWallet} className="connect-btn">
-            Connect Wallet
-          </button>
-        ) : (
-          <div className="wallet-info">
-            <p>Connected: {account.substring(0, 6)}...{account.substring(38)}</p>
-          </div>
-        )}
-      </header>
+    <div className="max-w-md mx-auto p-4 font-sans border rounded">
+      <h2 className="text-xl font-bold mb-2">CrewManager DApp</h2>
+      <button className="mb-3 px-3 py-1 bg-blue-500 text-white rounded" onClick={connectWallet}>
+        MetaMask 연결
+      </button>
+      <br />
+      <input
+        type="text"
+        placeholder="컨트랙트 주소 입력"
+        value={contractAddress}
+        onChange={e => setContractAddress(e.target.value)}
+        className="w-full border p-2 mb-2"
+      />
+      <button className="mb-3 px-3 py-1 bg-green-500 text-white rounded" onClick={loadContract}>
+        컨트랙트 연결
+      </button>
+      <hr className="my-4" />
 
-      {isConnected && (
-        <main className="main-content">
-          {/* Contract Status Section */}
-          <section className="section">
-            <h2>Contract Status</h2>
-            <div className="contract-status">
-              <div className={`status-item ${contractsDeployed.crewManager ? 'deployed' : 'not-deployed'}`}>
-                CrewManager: {contractsDeployed.crewManager ? '✅ Deployed' : '❌ Not Deployed'}
-              </div>
-              <div className={`status-item ${contractsDeployed.gameRegistry ? 'deployed' : 'not-deployed'}`}>
-                GameRegistry: {contractsDeployed.gameRegistry ? '✅ Deployed' : '❌ Not Deployed'}
-              </div>
-              <div className={`status-item ${contractsDeployed.matchManager ? 'deployed' : 'not-deployed'}`}>
-                MatchManager: {contractsDeployed.matchManager ? '✅ Deployed' : '❌ Not Deployed'}
-              </div>
-            </div>
-            {!contractsDeployed.crewManager && (
-              <p className="warning">
-                ⚠️ Contracts are not deployed to the current network. Please deploy the contracts first or check the network.
-              </p>
-            )}
-            <button onClick={testContractMethods} className="action-btn">
-              Test Contract Methods (Check Console)
-            </button>
-          </section>
+      <h3 className="font-semibold">크루 등록</h3>
+      <button className="mb-2 px-3 py-1 bg-purple-500 text-white rounded" onClick={registerCrew}>
+        크루 등록
+      </button>
+      {registerResult && <div>등록 결과: {registerResult}</div>}
 
-          {/* Crew Management Section */}
-          <section className="section">
-            <h2>Crew Management</h2>
-            <button onClick={registerCrew} className="action-btn">
-              Register New Crew
-            </button>
-            
-            <div className="crews-grid">
-              {crews.map(crew => (
-                <div key={crew.id} className="crew-card">
-                  <h3>Crew #{crew.id}</h3>
-                  <p>Owner: {crew.owner.substring(0, 6)}...{crew.owner.substring(38)}</p>
-                  <div className="stats">
-                    <span>Wins: {crew.wins}</span>
-                    <span>Losses: {crew.losses}</span>
-                    <span>Draws: {crew.draws}</span>
-                    <span className="points">Points: {crew.points}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* Game Registry Section */}
-          <section className="section">
-            <h2>Game Registry</h2>
-            <div className="add-game-form">
-              <input
-                type="text"
-                placeholder="Game Name"
-                value={newGameName}
-                onChange={(e) => setNewGameName(e.target.value)}
-              />
-              <input
-                type="text"
-                placeholder="Game URL"
-                value={newGameURL}
-                onChange={(e) => setNewGameURL(e.target.value)}
-              />
-              <button onClick={addGame} className="action-btn">
-                Add Game
-              </button>
-            </div>
-            
-            <div className="games-list">
-              {games.map(game => (
-                <div key={game.id} className="game-card">
-                  <h4>{game.name}</h4>
-                  <p>ID: {game.id}</p>
-                  <a href={game.gameURL} target="_blank" rel="noopener noreferrer">
-                    Play Game
-                  </a>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* Match Management Section */}
-          <section className="section">
-            <h2>Match Management</h2>
-            <div className="match-form">
-              <select
-                value={selectedGameId}
-                onChange={(e) => setSelectedGameId(e.target.value)}
-              >
-                <option value="">Select Game</option>
-                {games.map(game => (
-                  <option key={game.id} value={game.id}>
-                    {game.name} (ID: {game.id})
-                  </option>
-                ))}
-              </select>
-              
-              <input
-                type="text"
-                placeholder="Winner Crew IDs (comma separated)"
-                value={winners}
-                onChange={(e) => setWinners(e.target.value)}
-              />
-              
-              <input
-                type="text"
-                placeholder="Loser Crew IDs (comma separated)"
-                value={losers}
-                onChange={(e) => setLosers(e.target.value)}
-              />
-              
-              <input
-                type="text"
-                placeholder="Draw Crew IDs (comma separated)"
-                value={drawsInput}
-                onChange={(e) => setDrawsInput(e.target.value)}
-              />
-              
-              <button onClick={finalizeMatch} className="action-btn">
-                Finalize Match
-              </button>
-            </div>
-            
-            <div className="matches-list">
-              <h3>Recent Matches</h3>
-              {matches.map(match => (
-                <div key={match.id} className="match-card">
-                  <h4>Match #{match.id}</h4>
-                  <p>Game ID: {match.gameId}</p>
-                  <p>Winners: {match.winners.join(', ') || 'None'}</p>
-                  <p>Losers: {match.losers.join(', ') || 'None'}</p>
-                  <p>Draws: {match.draws.join(', ') || 'None'}</p>
-                  <p>Status: {match.finalized ? 'Finalized' : 'Pending'}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        </main>
+      <hr className="my-4" />
+      <h3 className="font-semibold">크루 정보 조회</h3>
+      <input
+        type="number"
+        placeholder="크루 ID 입력"
+        value={crewId}
+        onChange={e => setCrewId(e.target.value)}
+        className="w-full border p-2 mb-2"
+      />
+      <button className="mb-2 px-3 py-1 bg-indigo-500 text-white rounded" onClick={fetchCrewInfo}>
+        조회
+      </button>
+      {crewInfo && (
+        <div className="border p-2 my-2 rounded bg-gray-50">
+          <div>Owner: {crewInfo.owner}</div>
+          <div>Wins: {crewInfo.wins}</div>
+          <div>Losses: {crewInfo.losses}</div>
+          <div>Draws: {crewInfo.draws}</div>
+        </div>
       )}
+
+      <hr className="my-4" />
+      <h3 className="font-semibold">승/무/패 추가</h3>
+      <div className="space-x-2">
+        <button className="px-3 py-1 bg-red-500 text-white rounded" onClick={() => addResult("win")}>승 추가</button>
+        <button className="px-3 py-1 bg-yellow-500 text-white rounded" onClick={() => addResult("draw")}>무 추가</button>
+        <button className="px-3 py-1 bg-gray-700 text-white rounded" onClick={() => addResult("loss")}>패 추가</button>
+      </div>
+
+      <hr className="my-4" />
+      <h3 className="font-semibold">포인트 조회</h3>
+      <button className="mb-2 px-3 py-1 bg-teal-500 text-white rounded" onClick={fetchPoint}>
+        포인트 조회
+      </button>
+      {point && <div>포인트: {point}</div>}
+
+      {error && <div className="text-red-500 mt-2">에러: {error}</div>}
     </div>
   );
-}
+};
 
-export default App;
+export default CrewManagerApp;

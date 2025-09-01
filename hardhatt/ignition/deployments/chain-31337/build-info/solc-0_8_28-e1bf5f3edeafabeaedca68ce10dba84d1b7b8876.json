@@ -1,0 +1,39 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-e1bf5f3edeafabeaedca68ce10dba84d1b7b8876",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "userSourceNameMap": {
+    "contracts/pirates.sol": "project/contracts/pirates.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/pirates.sol": {
+        "content": "\npragma solidity ^0.8.21;\n\n/* =============== CrewManager (Prototype) =============== */\n// SPDX-License-Identifier: MIT\n\ncontract CrewManager {\n    // ----------------------\n    // 데이터 구조\n    // ----------------------\n    struct Crew {\n        address owner;   // 등록한 지갑\n        uint32 wins;\n        uint32 losses;\n        uint32 draws;\n    }\n\n    // ----------------------\n    // 상태 변수\n    // ----------------------\n    uint256 public nextCrewId = 1;        // 첫 crewId = 1\n    mapping(uint256 => Crew) public crews;\n    address public matchManager;          // 한 번 설정 후 고정\n\n    // ----------------------\n    // 이벤트\n    // ----------------------\n    event CrewRegistered(uint256 indexed crewId, address indexed owner);\n    event CrewUpdated(\n        uint256 indexed crewId,\n        uint32 wins,\n        uint32 losses,\n        uint32 draws\n    );\n    event MatchManagerSet(address indexed matchManager);\n\n    // ----------------------\n    // matchManager 설정 (1회)\n    // ----------------------\n    function setMatchManager(address m) external {\n        require(matchManager == address(0), \"already set\");\n        require(m != address(0), \"zero addr\");\n        matchManager = m;\n        emit MatchManagerSet(m);\n    }\n\n    // ----------------------\n    // Crew 등록\n    // ----------------------\n    function registerCrew() external returns (uint256 crewId) {\n        crews[nextCrewId] = Crew({\n            owner: msg.sender,\n            wins: 0,\n            losses: 0,\n            draws: 0\n        });\n\n        crewId = nextCrewId;\n        nextCrewId++;\n        \n        emit CrewRegistered(crewId, msg.sender);\n    }\n\n    // ----------------------\n    // 스탯 갱신 (오직 matchManager)\n    // ----------------------\n    modifier onlyMatchManager() {\n        require(msg.sender == matchManager, \"only matchManager\");\n        _;\n    }\n\n    function addWin(uint256 crewId) external onlyMatchManager {\n        crews[crewId].wins += 1;\n        emit CrewUpdated(\n            crewId,\n            crews[crewId].wins,\n            crews[crewId].losses,\n            crews[crewId].draws\n        );\n    }\n\n    function addLoss(uint256 crewId) external onlyMatchManager {\n        crews[crewId].losses += 1;\n        emit CrewUpdated(\n            crewId,\n            crews[crewId].wins,\n            crews[crewId].losses,\n            crews[crewId].draws\n        );\n    }\n\n    function addDraw(uint256 crewId) external onlyMatchManager {\n        crews[crewId].draws += 1;\n        emit CrewUpdated(\n            crewId,\n            crews[crewId].wins,\n            crews[crewId].losses,\n            crews[crewId].draws\n        );\n    }\n\n    // ----------------------\n    // 조회 함수\n    // ----------------------\n    function getCrew(uint256 crewId) external view returns (\n        address owner,\n        uint32 wins,\n        uint32 losses,\n        uint32 draws\n    ) {\n        Crew storage c = crews[crewId];\n        return (c.owner, c.wins, c.losses, c.draws);\n    }\n\n    function getPoint(uint256 crewId) external view returns (uint32) {\n        Crew storage c = crews[crewId];\n        return c.wins * 3 + c.draws;\n    }\n}\n\n\n/* =============== GameRegistry (Prototype) =============== */\ncontract GameRegistry {\n    struct Game {\n        uint256 gameId;\n        string name;\n        string gameURL;\n    }\n\n    uint256 public nextGameId = 1;\n    mapping(uint256 => Game) public games;\n\n    function addGame(string calldata name, string calldata gameURL) external returns (uint256 id) {\n        id = nextGameId++;\n        games[id] = Game(id, name, gameURL);\n    }\n\n    function getGame(uint256 gameId) external view returns (uint256, string memory, string memory) {\n        Game storage g = games[gameId];\n        return (g.gameId, g.name, g.gameURL);\n    }\n}\n\n/* =============== MatchManager (Prototype) =============== */\ninterface ICrewManager {\n    function addWin(uint256 crewId) external;\n    function addLoss(uint256 crewId) external;\n    function addDraw(uint256 crewId) external;\n}\n\ncontract MatchManager {\n    ICrewManager public crewManager;\n\n    struct Match {\n        uint256 matchId;\n        uint256 gameId;\n        uint256[] winners;\n        uint256[] losers;\n        uint256[] draws;\n        bool finalized;\n    }\n\n    uint256 public nextMatchId = 1;\n    mapping(uint256 => Match) public matches;\n\n    event MatchFinalized(uint256 indexed matchId, uint256 indexed gameId);\n\n    constructor(address crewManagerAddr) {\n        crewManager = ICrewManager(crewManagerAddr);\n    }\n\n    // PROTOTYPE: 아무나 호출\n    function finalizeMatch(\n        uint256 gameId,\n        uint256[] calldata winners,\n        uint256[] calldata losers,\n        uint256[] calldata draws\n    ) external returns (uint256 id) {\n        id = nextMatchId++;\n        Match storage m = matches[id];\n        m.matchId = id;\n        m.gameId = gameId;\n        m.winners = winners;\n        m.losers = losers;\n        m.draws = draws;\n        m.finalized = true;\n\n        // 즉시 스탯 반영\n        for (uint i = 0; i < winners.length; i++) {\n            crewManager.addWin(winners[i]);\n        }\n        for (uint i = 0; i < losers.length; i++) {\n            crewManager.addLoss(losers[i]);\n        }\n        for (uint i = 0; i < draws.length; i++) {\n            crewManager.addDraw(draws[i]);\n        }\n\n        emit MatchFinalized(id, gameId);\n    }\n\n    function getMatch(uint256 matchId) external view returns (\n        uint256 id,\n        uint256 gameId,\n        uint256[] memory winners,\n        uint256[] memory losers,\n        uint256[] memory draws,\n        bool finalized\n    ) {\n        Match storage m = matches[matchId];\n        return (m.matchId, m.gameId, m.winners, m.losers, m.draws, m.finalized);\n    }\n}\n"
+      }
+    }
+  }
+}
