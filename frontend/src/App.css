@@ -1,38 +1,65 @@
-.App {
-  text-align: center;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
+@layer components {
+  .contract-section {
+    @apply bg-gray-800 rounded-lg p-6 mb-6 shadow-lg;
   }
-}
-
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
-}
-
-.App-link {
-  color: #61dafb;
-}
-
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
+  
+  .input-group {
+    @apply mb-6;
   }
-  to {
-    transform: rotate(360deg);
+  
+  .input-group h3 {
+    @apply text-lg font-semibold mb-3 text-blue-300;
+  }
+  
+  .input-group input {
+    @apply w-full p-3 mb-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500;
+  }
+  
+  .input-group button {
+    @apply w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .info-display {
+    @apply mt-4 p-4 bg-gray-700 rounded-lg border-l-4 border-green-500;
+  }
+  
+  .info-display p {
+    @apply mb-2 last:mb-0 text-gray-200;
+  }
+  
+  .wallet-section {
+    @apply mb-6 p-4 bg-gray-800 rounded-lg;
+  }
+  
+  .wallet-section button {
+    @apply bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-lg transition-colors duration-200;
+  }
+  
+  .error {
+    @apply bg-red-500 text-white p-4 rounded-lg mb-4 border-l-4 border-red-700;
+  }
+  
+  .loading {
+    @apply bg-blue-500 text-white p-4 rounded-lg mb-4 border-l-4 border-blue-700;
+  }
+  
+  .address-info {
+    @apply bg-gray-800 rounded-lg p-6 mt-8 shadow-lg;
+  }
+  
+  .address-info h3 {
+    @apply text-lg font-semibold mb-4 text-blue-300;
+  }
+  
+  .address-info p {
+    @apply mb-2 last:mb-0 text-gray-300 font-mono text-sm break-all;
+  }
+  
+  .state-panel {
+    @apply border-l border-gray-700;
   }
 }
