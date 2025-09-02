@@ -2,9 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
 @layer components {
+  .modern-card {
+    @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-6 transition-all duration-200 hover:shadow-md;
+  }
+  
+  .modern-input {
+    @apply w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all duration-200;
+  }
+  
+  .modern-button-primary {
+    @apply px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .modern-button-secondary {
+    @apply px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-all duration-200;
+  }
+  
+  .modern-nav {
+    @apply bg-white/80 backdrop-blur-sm border-b border-gray-100 sticky top-0 z-50;
+  }
+  
+  .gradient-background {
+    @apply bg-gradient-to-br from-blue-50 via-white to-blue-50 min-h-screen;
+  }
+  
   .contract-section {
-    @apply bg-gray-800 rounded-lg p-6 mb-6 shadow-lg;
+    @apply modern-card mb-8;
   }
   
   .input-group {
@@ -12,54 +44,66 @@
   }
   
   .input-group h3 {
-    @apply text-lg font-semibold mb-3 text-blue-300;
+    @apply text-lg font-semibold mb-4 text-gray-800;
   }
   
   .input-group input {
-    @apply w-full p-3 mb-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500;
+    @apply modern-input;
   }
   
   .input-group button {
-    @apply w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200;
+    @apply modern-button-primary w-full;
   }
   
   .info-display {
-    @apply mt-4 p-4 bg-gray-700 rounded-lg border-l-4 border-green-500;
+    @apply mt-4 p-4 bg-blue-50 rounded-xl border-l-4 border-blue-400;
   }
   
   .info-display p {
-    @apply mb-2 last:mb-0 text-gray-200;
+    @apply mb-2 last:mb-0 text-gray-700;
   }
   
   .wallet-section {
-    @apply mb-6 p-4 bg-gray-800 rounded-lg;
+    @apply modern-card mb-8 text-center;
   }
   
   .wallet-section button {
-    @apply bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-lg transition-colors duration-200;
+    @apply modern-button-primary;
   }
   
   .error {
-    @apply bg-red-500 text-white p-4 rounded-lg mb-4 border-l-4 border-red-700;
+    @apply bg-red-50 text-red-700 p-4 rounded-xl mb-4 border-l-4 border-red-400;
   }
   
   .loading {
-    @apply bg-blue-500 text-white p-4 rounded-lg mb-4 border-l-4 border-blue-700;
+    @apply bg-blue-50 text-blue-700 p-4 rounded-xl mb-4 border-l-4 border-blue-400;
   }
   
   .address-info {
-    @apply bg-gray-800 rounded-lg p-6 mt-8 shadow-lg;
+    @apply modern-card mt-8;
   }
   
   .address-info h3 {
-    @apply text-lg font-semibold mb-4 text-blue-300;
+    @apply text-lg font-semibold mb-4 text-gray-800;
   }
   
   .address-info p {
-    @apply mb-2 last:mb-0 text-gray-300 font-mono text-sm break-all;
+    @apply mb-2 last:mb-0 text-gray-600 font-mono text-sm break-all bg-gray-50 p-3 rounded-lg;
   }
   
   .state-panel {
-    @apply border-l border-gray-700;
+    @apply bg-white/90 backdrop-blur-sm border-l border-gray-200 w-80 p-6 overflow-y-auto;
+  }
+  
+  .hero-section {
+    @apply text-center mb-12 py-16;
+  }
+  
+  .hero-title {
+    @apply text-5xl font-bold text-gray-900 mb-4 bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent;
+  }
+  
+  .hero-subtitle {
+    @apply text-xl text-gray-600 mb-8 max-w-2xl mx-auto;
   }
 }

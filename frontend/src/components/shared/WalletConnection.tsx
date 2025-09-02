@@ -11,17 +11,19 @@ export const WalletConnection: React.FC<WalletConnectionProps> = ({ account, onC
   };
 
   return (
-    <div className="wallet-section">
+    <>
       {!account ? (
-        <button onClick={onConnect}>🦊 MetaMask 연결</button>
+        <button onClick={onConnect} className="modern-button-primary">
+          Connect Wallet
+        </button>
       ) : (
-        <div className="text-center">
-          <p className="text-green-400 font-semibold">✅ 지갑 연결됨</p>
-          <p className="font-mono text-sm text-gray-300 mt-1">
+        <div className="flex items-center space-x-3 bg-green-50 px-4 py-2 rounded-xl">
+          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+          <span className="text-sm font-medium text-green-700">
             {formatAddress(account)}
-          </p>
+          </span>
         </div>
       )}
-    </div>
+    </>
   );
 };
